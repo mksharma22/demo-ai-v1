@@ -1,0 +1,68 @@
+# Address matching configuration.
+#
+# IMPORTANT: every number in this file is a STARTING VALUE chosen by judgement,
+# not a calibrated parameter. Validate and tune against a human-labelled set of
+# address pairs from your own data (see scripts/evaluate.py) before relying on
+# the decisions. The resulting 0-100 score is a weighted similarity, NOT a
+# probability.
+
+# Relative importance of each address component. Only components present on
+# BOTH sides contribute to the score; missing components are "unknown", never
+# counted as mismatches. Components without a weight are kept in the
+# normalized string but ignored for scoring.
+[weights]
+house_number  = 25
+road          = 20
+unit          = 10
+building_name = 5
+postcode      = 15
+locality      = 5
+city          = 10
+state         = 5
+country       = 5
+po_box        = 10
+
+# RapidFuzz similarity cut-offs (0-1) for free-text components
+# (road, building_name, locality, city, state, country).
+[similarity]
+text_match   = 0.90   # >= this -> component "match"
+text_similar = 0.75   # >= this -> "similar" (partial credit, no contradiction)
+                      # <  this -> "conflict"
+max_expansions = 5    # libpostal expansions compared per component
+
+[thresholds]
+match        = 85     # score needed (together with the rules below) for MATCH
+non_match    = 50     # score below this -> NON-MATCH (if enough evidence)
+min_coverage = 0.60   # of the weight of components present on EITHER side, the
+                      # share that must be present on BOTH sides before MATCH or a
+                      # score-based NON-MATCH is allowed (guards partial addresses)
+
+[rules]
+# MATCH requires at least one MATCHED component from EACH group.
+# Default: same street, same house number or building name, and at least one
+# confirming location component. Street/city similarity alone never yields MATCH.
+match_requires = [
+  ["road", "po_box"],
+  ["house_number", "building_name", "po_box"],
+  ["postcode", "city", "locality"],
+]
+# If one of these is present on one side only, the pair cannot be MATCH
+# (e.g. "12 Main St" vs "Main St" or a unit present on only one side).
+review_if_missing_one_side = ["house_number", "unit"]
+
+# What to do when a component is present on both sides and conflicts.
+#   "non_match"  -> decision is NON-MATCH regardless of the aggregate score
+#   "review"     -> decision is at most REVIEW
+#   "score_only" -> only lowers the score
+# NON-MATCH outranks REVIEW when several contradictions occur.
+[contradictions]
+house_number  = "non_match"
+unit          = "non_match"
+road          = "non_match"
+po_box        = "non_match"
+country       = "non_match"
+postcode      = "review"      # postcodes are often mistyped; ask a human
+city          = "review"      # city aliases (Bombay/Mumbai) are common
+state         = "review"
+building_name = "review"
+locality      = "score_only"

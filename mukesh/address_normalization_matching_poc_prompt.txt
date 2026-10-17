@@ -1,0 +1,218 @@
+PROJECT PROMPT: AGENTIC AI ADDRESS NORMALIZATION AND MATCHING POC
+
+ROLE
+You are a senior AI/ML engineer, Python developer, and solution architect. Design and implement a working proof of concept (POC) for an Address Normalization and Matching chatbot. Prefer a simple, reliable architecture over unnecessary multi-agent complexity.
+
+1. OBJECTIVE
+Build a chatbot application where a user uploads an XLSX file. A background workflow reads the file, normalizes both addresses using libpostal, compares them using explainable address-matching logic, and generates a downloadable XLSX result file.
+
+Use one LangGraph workflow/orchestrator agent for the POC. Treat normalization, matching, validation, and Excel generation as deterministic Python tools—not separate AI agents. An optional second LLM agent may be added later for ambiguous cases, but it is not required for the initial POC.
+
+2. INPUT FILE
+Accept an Excel .xlsx file containing these required columns:
+- AddressA: a partial or complete address.
+- AddressB: a partial or complete address.
+
+Validate that both columns exist. Handle blank cells, duplicate rows, malformed values, and normalization failures without silently dropping input records. Preserve original address text exactly in the output. If additional input columns exist, they may be ignored because the requested output schema contains only the five columns below.
+
+3. REQUIRED OUTPUT FILE
+Generate a downloadable .xlsx file containing exactly these columns, in this order:
+1. AddressA
+2. AddressB
+3. normalized_AddressA
+4. normalized_AddressB
+5. Result
+
+Column requirements:
+- AddressA: original address A.
+- AddressB: original address B.
+- normalized_AddressA: normalized representation of AddressA produced using libpostal.
+- normalized_AddressB: normalized representation of AddressB produced using libpostal.
+- Result: decision, similarity score, and concise, evidence-based explanation.
+
+Example Result values:
+- MATCH | Score: 98/100 | Building number, street, and locality match; differences are formatting only.
+- NON-MATCH | Score: 62/100 | Building number differs: 12 vs 21.
+- REVIEW | Score: 76/100 | Street and city appear consistent, but the building number is missing from AddressB.
+These scores are illustrative only. Implement and calibrate scoring with test data; do not represent an uncalibrated similarity score as a probability.
+
+4. ADDRESS NORMALIZATION
+Use libpostal for address parsing and normalization. Install and document the native libpostal dependency and its required language data; do not assume that installing a Python wrapper alone is sufficient.
+
+Create a clear normalization function that:
+- Accepts a string or empty value.
+- Handles missing values safely.
+- Calls libpostal normalization/parsing appropriately.
+- Returns a normalized address string.
+- Handles exceptions and records failures transparently.
+- Does not invent address components or claim that normalization verifies a real-world address.
+
+Keep the original addresses unchanged. Do not use the input file's old “Normalized Address” or “Reason for matching/unmatching” columns as required inputs; the required input for this POC is AddressA and AddressB.
+
+5. ADDRESS MATCHING AND SCORING
+Implement a deterministic, explainable matching engine. Do not rely solely on an LLM or a single fuzzy string score.
+
+Compare address evidence where available, including:
+- Building/house number
+- Street name and type
+- Unit/apartment number when present
+- Locality/neighborhood
+- City
+- State/region
+- Postal code
+- Country
+
+Use libpostal parsing output and suitable Python rules to extract and compare address components. Use RapidFuzz for string similarity where appropriate. Account for punctuation, casing, common abbreviations, and token ordering.
+
+Important decision principles:
+- Matching building numbers and street names are strong positive evidence.
+- Conflicting building numbers, unit numbers, or postal codes may be strong negative evidence, depending on context.
+- Missing components are unknown, not automatically mismatches.
+- Partial addresses should often be REVIEW rather than definitive NON-MATCH.
+- A high aggregate score must not override a critical contradiction, such as conflicting building numbers, without an explicit, defensible rule.
+- Do not infer that two addresses identify the same property from city or street similarity alone.
+- Clearly distinguish MATCH, NON-MATCH, and REVIEW.
+
+Implement a configurable weighted score from 0 to 100 based on available components. Make component weights, thresholds, and contradiction rules configurable. Provide sensible initial defaults, but label them as starting values that must be validated against labeled address pairs. Do not describe the score as a probability unless it has been statistically calibrated.
+
+6. RESULT EXPLANATIONS
+For every row, populate Result with:
+- Decision: MATCH, NON-MATCH, or REVIEW.
+- Score: integer from 0 to 100, where a score can be computed reliably.
+- Explanation: concise reason based on observed component-level evidence.
+
+Examples:
+- “MATCH | Score: 98/100 | Building number and street match; punctuation differs.”
+- “NON-MATCH | Score: 62/100 | Building number differs: 12 vs 21.”
+- “REVIEW | Score: 76/100 | Street and city are similar, but AddressB has no building number.”
+- “REVIEW | Score: N/A | AddressA is empty; unable to compare.”
+- “REVIEW | Score: N/A | Normalization failed for AddressB.”
+
+Explanations must be grounded in actual comparison results. Never invent components, evidence, or certainty. Keep the output format consistent and avoid overly long explanations.
+
+7. AGENTIC WORKFLOW
+Use LangGraph to orchestrate a clear workflow:
+1. Accept upload and create a processing job.
+2. Validate the workbook and required columns.
+3. Process rows in batches.
+4. Normalize AddressA and AddressB independently using libpostal.
+5. Parse/compare components and calculate scores using deterministic Python tools.
+6. Apply decision rules and generate evidence-based explanations.
+7. Collect row-level errors and job-level metrics.
+8. Write the output XLSX with exactly the five required columns.
+9. Make the result downloadable.
+10. Allow the user to ask follow-up questions about the completed job, such as:
+   - “How many rows are MATCH, NON-MATCH, and REVIEW?”
+   - “Show rows where building numbers differ.”
+   - “Show rows with missing addresses.”
+   - “What are the most common reasons for non-matches?”
+   - “Export only REVIEW rows.”
+Only implement follow-up actions that can be supported by stored job results. Do not claim an action completed until it has actually completed.
+
+Use an LLM for natural-language interaction and, if justified, for clarifying ambiguous explanations. Keep core normalization, scoring, and decisions deterministic and testable. Do not send every row to an LLM by default.
+
+8. RECOMMENDED TECHNOLOGY STACK
+- Python 3.11 or another explicitly supported version.
+- Streamlit for the POC UI: upload, progress, results summary, follow-up chat, and download.
+- FastAPI only if a separate API is useful for the chosen implementation; avoid unnecessary layers in a small POC.
+- LangGraph for workflow orchestration.
+- libpostal and its Python bindings for normalization/parsing.
+- RapidFuzz for fuzzy string comparison.
+- pandas and openpyxl for XLSX input/output.
+- Celery + Redis for background jobs if file sizes and runtime require asynchronous workers. For a very small local POC, a simpler background execution approach may be used, but explain its limits.
+- Optional PostgreSQL for durable job metadata and audit records in a more production-like deployment.
+- OpenAI API or an enterprise-approved LLM for chatbot interaction, with model/API configuration supplied through environment variables.
+
+Do not add vector databases, embeddings, RAG, or additional agents unless a specific requirement justifies them.
+
+9. USER INTERFACE
+Build a simple, usable Streamlit interface with:
+- XLSX upload control.
+- Required-column validation.
+- Start-processing action.
+- Job status and progress where supported.
+- Summary counts for MATCH, NON-MATCH, REVIEW, and errors.
+- A preview of output rows.
+- Download button for the completed XLSX file.
+- A follow-up chat area for questions about the current job.
+- Clear errors and recovery guidance.
+
+10. BACKGROUND PROCESSING AND RELIABILITY
+- Process rows in configurable batches.
+- Preserve row order and one output row per input row.
+- Do not silently drop records.
+- Track progress and processing errors.
+- Avoid loading excessively large files fully into memory where feasible.
+- Use safe temporary-file handling and clean up temporary files when appropriate.
+- Handle job failures, retries, and duplicate submissions sensibly.
+- Do not expose local filesystem paths, secrets, or stack traces to ordinary users.
+- Document file-size and concurrency limitations of the POC.
+- Ensure background processing does not block the UI during long jobs.
+
+11. TESTING AND EVALUATION
+Provide automated tests for:
+- Exact same addresses.
+- Differences in case, punctuation, spacing, and common abbreviations.
+- Different building numbers.
+- Different unit/apartment numbers.
+- Different postal codes.
+- Partial addresses.
+- Missing AddressA or AddressB.
+- Non-English/international addresses where supported.
+- Malformed XLSX files and missing required columns.
+- libpostal errors or unavailable dependency.
+- Output schema, row count, and row ordering.
+- Repeatable deterministic scoring.
+- Explanation consistency with the computed component differences.
+
+Create a small labeled sample dataset for demonstration. Clearly identify synthetic examples. Explain how to evaluate precision, recall, false-match rate, false-non-match rate, and manual-review rate against a human-labeled validation set. Tune weights and thresholds using validation data rather than assuming generic thresholds are universally correct.
+
+12. SECURITY AND PRIVACY
+- Validate upload file type and size.
+- Do not execute macros or formulas from uploaded workbooks.
+- Treat cell contents as untrusted data.
+- Do not log complete addresses unnecessarily.
+- Keep API keys in environment variables or a secret manager.
+- Explain data retention and temporary-file cleanup.
+- If deployed for enterprise use, add authentication, authorization, encryption, audit logs, and appropriate data-retention controls.
+
+13. REQUIRED DELIVERABLES
+Produce:
+1. Architecture explanation and Mermaid workflow diagram.
+2. Project directory structure.
+3. Complete, runnable Python source code—not pseudocode.
+4. Dependency files such as requirements.txt and setup instructions.
+5. libpostal installation instructions for the target OS/environment.
+6. Streamlit UI code.
+7. LangGraph workflow code and clear tool boundaries.
+8. Configurable scoring weights, thresholds, and contradiction rules.
+9. Excel input/output implementation.
+10. Sample input XLSX or a script to create one, plus expected sample output.
+11. Unit and integration tests.
+12. README with setup, run, test, troubleshoot, and deployment instructions.
+13. Example environment-variable file without real secrets.
+14. Known limitations and a plan for evolving the POC toward production.
+
+14. IMPLEMENTATION QUALITY REQUIREMENTS
+- Use modular, typed, documented Python functions.
+- Separate normalization, component extraction, scoring, decision-making, explanation generation, Excel I/O, orchestration, and UI.
+- Avoid monolithic scripts where separation improves maintainability.
+- Make important configuration values adjustable without editing business logic.
+- Use clear logging and actionable error messages.
+- Ensure the code is internally consistent and runnable.
+- Do not claim tests passed unless they were actually executed.
+- If a dependency or operating-system constraint prevents a fully portable solution, state it clearly and provide tested or clearly labeled setup alternatives.
+- Do not invent external services, API credentials, or successful execution results.
+
+15. EXPECTED RESPONSE FORMAT
+Start with a concise architecture summary and key design choices. Then provide:
+A. Architecture and workflow
+B. Directory structure
+C. Installation and configuration
+D. Complete source code, file by file
+E. Sample input/output
+F. Test suite and commands
+G. Run instructions
+H. Limitations and production-hardening recommendations
+
+Prioritize a functional, minimal POC with one LangGraph orchestrator and deterministic processing tools. Add a second AI agent only if there is a demonstrated need for specialized ambiguous-case analysis.
