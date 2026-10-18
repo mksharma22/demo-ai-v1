@@ -26,7 +26,37 @@ from addrmatch.llm import classify_intent  # noqa: E402
 from addrmatch.normalization import libpostal_status  # noqa: E402
 from addrmatch.settings import get_settings  # noqa: E402
 
-st.set_page_config(page_title="Address Matcher", page_icon="📍", layout="wide")
+# Use an approved American Express logo saved alongside this script.
+logo_path = Path(__file__).parent / "amex_logo4.png"
+favicon_path = Path(__file__).parent / "favicon.png"
+st.set_page_config(
+    page_title="Address Matcher",
+    page_icon=str(favicon_path) if favicon_path.is_file() else "📍",
+    layout="wide",
+    initial_sidebar_state="expanded"
+
+    #menu_items={"Get Help": None, "Report a bug": None, "About": None},
+)
+
+# Hide Streamlit's deployment toolbar, without hiding the sidebar toggle.
+# Load external CSS
+def load_css(file_name):
+    css_path = Path(__file__).parent / file_name
+    with open(css_path, encoding="utf-8") as f:
+        st.markdown(
+            f"<style>{f.read()}</style>",
+            unsafe_allow_html=True
+        )
+
+load_css("style.css")
+
+st.markdown(
+    """<style>
+    [data-testid="stToolbar"] {visibility: hidden; height: 0;}
+    [data-testid="stDecoration"] {display: none;}
+    </style>""",
+    unsafe_allow_html=True,
+)
 settings = get_settings()
 logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -49,12 +79,17 @@ def validate_upload(name: str, content: bytes):
 # ---------------------------------------------------------------- sidebar
 ok, lp_msg = libpostal_status()
 with st.sidebar:
-    st.header("Status")
-    (st.success if ok else st.error)(f"libpostal: {'available' if ok else 'NOT available'}")
-    if not ok:
-        st.caption(lp_msg + " See README → Installation.")
-    st.caption(f"Follow-up assistant: {'LLM routing on' if settings.llm_enabled else 'rule-based (no LLM configured)'}")
-    st.caption(f"Limits: {settings.max_upload_mb} MB, {settings.max_rows:,} rows · batch size {settings.batch_size}")
+    if logo_path.is_file():
+        st.image(str(logo_path), width=180)
+    else:
+        st.warning("")
+    #st.header("Status")
+    #(st.success if ok else st.error)(f"libpostal: {'available' if ok else 'NOT available'}")
+    #if not ok:
+    #    st.caption(lp_msg + " See README → Installation.")
+    #st.caption(f"Follow-up assistant: {'LLM routing on' if settings.llm_enabled else 'rule-based (no LLM configured)'}")
+
+    #st.caption(f"Limits: {settings.max_upload_mb} MB, {settings.max_rows:,} rows · batch size {settings.batch_size}")
     st.divider()
     try:
         manager = get_manager()
@@ -71,11 +106,12 @@ with st.sidebar:
     st.caption(f"Job data is deleted after {settings.job_retention_hours} h.")
 
 st.title("Address Normalization & Matching")
-st.caption("Upload an .xlsx with **AddressA** and **AddressB** columns. Addresses are normalized with libpostal "
-           "and compared component by component. Scores are weighted similarity, not probabilities.")
+#st.caption("Upload an .xlsx with **AddressA** and **AddressB** columns. Addresses are normalized with libpostal "
+#           "and compared component by component. Scores are weighted similarity, not probabilities.")
 
 # ---------------------------------------------------------------- upload
-uploaded = st.file_uploader("Workbook (.xlsx)", type=["xlsx"], accept_multiple_files=False)
+#uploaded = st.file_uploader("Workbook (.xlsx)", type=["xlsx"], accept_multiple_files=False)
+uploaded = st.file_uploader("", type=["xlsx"], accept_multiple_files=False)
 if uploaded is not None:
     content = uploaded.getvalue()
     try:

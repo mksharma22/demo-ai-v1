@@ -1,0 +1,29 @@
+/* Reduce top padding above American Express logo */
+.stMainBlockContainer {
+    padding-top: 0.25rem !important;
+}
+
+/* Reduce spacing between logo and heading */
+[data-testid="stImage"] {
+    margin-bottom: -0.75rem;
+}
+
+/* Hide Deploy button */
+[data-testid="stAppDeployButton"] {
+    display: none !important;
+}
+
+@media (min-width: 768px) {
+    [data-testid="stSidebar"] {
+        width: 310px !important;
+        min-width: 310px !important;
+        max-width: 310px !important;
+        transform: none !important;
+    }
+
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="stSidebarResizer"],
+    [data-testid="collapsedControl"] {
+        display: none !important;
+    }
+}
